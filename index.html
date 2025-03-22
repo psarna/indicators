@@ -58,12 +58,8 @@
             width: 12%;
             text-align: center;
         }
-        .stat-box h3 {
-            margin-top: 0;
-            color: #555;
-        }
         .stat-box p {
-            font-size: 20px;
+            font-size: 12px;
             font-weight: bold;
             margin: 5px 0 0 0;
         }
@@ -133,7 +129,7 @@
         }
         #script-editor {
             width: 100%;
-            height: 200px;
+            height: 150px;
             font-family: monospace;
             padding: 10px;
             border: 1px solid #e2e8f0;
@@ -169,10 +165,9 @@
 <body>
     <div class="container">
         <h1>
-            <img src="logo.svg" width="50px" height="50px"></img>
             sarna indicators
-            <img src="logo.svg" width="50px" height="50px"></img>
         </h1>
+        <h2><img src="logo.svg" width="50px" height="50px"></img></h2>
         
         <div id="symbol-info" class="symbol-info">BTC/USD</div>
         
@@ -187,20 +182,16 @@
         <div id="content" style="display:none;">
             <div class="stats">
                 <div class="stat-box">
-                    <h3>Mean</h3>
+                    <p>mean</p>
                     <p id="mean">-</p>
                 </div>
                 <div class="stat-box">
-                    <h3>Std Dev</h3>
+                    <p>stddev</p>
                     <p id="stdDev">-</p>
                 </div>
                 <div class="stat-box">
-                    <h3>Current Value</h3>
+                    <p>current</p>
                     <p id="current-value">-</p>
-                </div>
-                <div class="stat-box">
-                    <h3>Z-Score</h3>
-                    <p id="zScore">-</p>
                 </div>
             </div>
             
@@ -301,16 +292,16 @@ function showChart(chartId) {
     }
 }
 
+var editor;
+
 // Function to run the script and update the URL
 function runScript() {
-    const scriptContent = document.getElementById('script-editor').value;
+    const scriptContent = editor.getValue();
+    console.log("encoded content: ", scriptContent)
     const encodedScript = encodeBase64(scriptContent);
     const symbol = document.getElementById('symbol-input').value || "Custom Data";
-    
-    // Update URL with the new script and symbol
     const newUrl = window.location.pathname + 
                   `?script=${encodedScript}&symbol=${encodeURIComponent(symbol)}`;
-    
     window.location.href = newUrl;
 }
 
@@ -321,8 +312,9 @@ async function initialize() {
     try {
         // If no script parameter is provided, use the default script
         if (!scriptParam) {
+            console.log("difolt")
             scriptParam = encodeBase64(DEFAULT_SCRIPT);
-            document.getElementById('info').style.display = 'block';
+             document.getElementById('info').style.display = 'none';
             // Don't redirect, just use the default script parameter
         } else {
             document.getElementById('info').style.display = 'none';
@@ -349,7 +341,7 @@ async function initialize() {
             throw new Error(`Error executing script: ${error.message}`);
         }
 
-        var editor = CodeMirror.fromTextArea(document.getElementById('script-editor'), {
+        editor = CodeMirror.fromTextArea(document.getElementById('script-editor'), {
             lineNumbers: true,
             mode: "javascript",
             theme: "default"
@@ -432,7 +424,6 @@ function calculateStats(prices, timestamps) {
     document.getElementById('mean').textContent = formatNumber(mean);
     document.getElementById('stdDev').textContent = formatNumber(stdDev);
     document.getElementById('current-value').textContent = formatNumber(currentValue);
-    document.getElementById('zScore').textContent = zScore.toFixed(2);
     
     // Create the timeline chart
     createTimeSeriesChart(prices, timestamps, mean, stdDev);
@@ -494,7 +485,7 @@ function createTimeSeriesChart(prices, timestamps, mean, stdDev) {
             labels: timestamps,
             datasets: [
                 {
-                    label: 'Price',
+                    label: 'Value',
                     data: prices,
                     borderColor: 'rgba(54, 162, 235, 1)',
                     backgroundColor: 'rgba(54, 162, 235, 0.1)',
@@ -534,7 +525,7 @@ function createTimeSeriesChart(prices, timestamps, mean, stdDev) {
                 y: {
                     title: {
                         display: true,
-                        text: 'Price'
+                        text: 'Value'
                     }
                 },
                 y1: {
@@ -554,7 +545,7 @@ function createTimeSeriesChart(prices, timestamps, mean, stdDev) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            if (context.dataset.label === 'Price') {
+                            if (context.dataset.label === 'Value') {
                                 const value = context.parsed.y;
                                 const z = (value - mean) / stdDev;
                                 return [`Price: ${formatNumber(value)}`, `Z-Score: ${z.toFixed(2)}`];
