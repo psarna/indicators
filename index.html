@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Financial Z-Score Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-moment/1.0.1/chartjs-adapter-moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gauge.js/1.3.7/gauge.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+        .gauge-container {
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .gauge-value {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            width: 22%;
+            text-align: center;
+        }
+        .stat-box h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .stat-box p {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 5px 0 0 0;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 20px;
+            color: #666;
+        }
+        .error {
+            background-color: #ffeeee;
+            color: #cc0000;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .info {
+            background-color: #f0f0ff;
+            color: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .symbol-info {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+            background-color: #f5f5f5;
+        }
+        .tab.active {
+            background-color: white;
+            border-color: #ddd;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Enhanced Financial Z-Score Visualizer</h1>
+        
+        <div id="symbolInfo" class="symbol-info">BTC/USD</div>
+        
+        <div id="info" class="info">
+            Using default BTC/USD price data. You can provide a custom data source by adding ?script=URL to the page URL.
+        </div>
+        
+        <div id="errorMessage" class="error"></div>
+        
+        <div id="loading" class="loading">
+            Loading financial data...
+        </div>
+        
+        <div id="content" style="display:none;">
+            <div class="stats">
+                <div class="stat-box">
+                    <h3>Mean</h3>
+                    <p id="mean">-</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Std Dev</h3>
+                    <p id="stdDev">-</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Current Value</h3>
+                    <p id="currentValue">-</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Z-Score</h3>
+                    <p id="zScore">-</p>
+                </div>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="showChart('timelineChart')">Timeline with Z-Score</div>
+                <div class="tab" onclick="showChart('distributionChart')">Normal Distribution</div>
+            </div>
+            
+            <div id="timelineChart" class="chart-container">
+                <canvas id="timeSeriesChart"></canvas>
+            </div>
+            
+            <div id="distributionChart" class="chart-container" style="display:none;">
+                <canvas id="distChart"></canvas>
+            </div>
+            
+            <h2>Current Z-Score</h2>
+            <div class="gauge-container">
+                <canvas id="gauge"></canvas>
+                <div class="gauge-value" id="gaugeValue">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Function to parse URL parameters
+        function getParameterByName(name, url = window.location.href) {
+            name = name.replace(/[\[\]]/g, '\\$&');
+            var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+                results = regex.exec(url);
+            if (!results) return null;
+            if (!results[2]) return '';
+            return decodeURIComponent(results[2].replace(/\+/g, ' '));
+        }
+
+        // Default BTC/USD data endpoint
+        const DEFAULT_BTC_ENDPOINT = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily";
+
+        // Getting the script parameter
+        const scriptUrl = getParameterByName('script');
+        
+        // Chart instances
+        let timeSeriesChart, distributionChart;
+        
+        // Function to switch between chart views
+        function showChart(chartId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.chart-container').forEach(container => container.style.display = 'none');
+            
+            if (chartId === 'timelineChart') {
+                document.querySelector('.tab:first-child').classList.add('active');
+                document.getElementById('timelineChart').style.display = 'block';
+            } else {
+                document.querySelector('.tab:last-child').classList.add('active');
+                document.getElementById('distributionChart').style.display = 'block';
+            }
+        }
+        
+        // Main function to initialize everything once data is loaded
+        async function initialize() {
+            try {
+                let dataSource;
+                let isUsingDefault = false;
+                
+                if (!scriptUrl) {
+                    // Use default BTC/USD data
+                    dataSource = DEFAULT_BTC_ENDPOINT;
+                    isUsingDefault = true;
+                    document.getElementById('info').style.display = 'block';
+                } else {
+                    // Use the provided script URL
+                    dataSource = scriptUrl;
+                    document.getElementById('info').style.display = 'none';
+                    
+                    // Update the symbol info based on URL if possible
+                    const urlSymbol = getParameterByName('symbol') || "Custom Data";
+                    document.getElementById('symbolInfo').textContent = urlSymbol;
+                }
+                
+                // Fetch the financial data
+                const response = await fetch(dataSource, {
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Process the data - handle different formats
+                if (isUsingDefault) {
+                    // Process CoinGecko data format for BTC/USD
+                    processBTCData(data);
+                } else {
+                    // Process the data using the general method
+                    processData(data);
+                }
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorMessage').style.display = 'block';
+                document.getElementById('errorMessage').textContent = `Error: ${error.message}`;
+                console.error("Error:", error);
+            }
+        }
+        
+        function processBTCData(data) {
+            // CoinGecko returns prices as [timestamp, price] pairs
+            if (data.prices && Array.isArray(data.prices)) {
+                const timestamps = data.prices.map(pair => new Date(pair[0]));
+                const prices = data.prices.map(pair => pair[1]);
+                
+                if (prices.length === 0) {
+                    throw new Error("No price data found in the BTC/USD data.");
+                }
+                
+                // Process the price data with timestamps
+                calculateStats(prices, timestamps);
+            } else {
+                throw new Error("Unexpected format in BTC/USD data.");
+            }
+        }
+        
+        function processData(data) {
+            // Assuming the data has a prices array or similar structure
+            let prices = [];
+            let timestamps = [];
+            
+            // Extract prices based on the structure of the data
+            if (data.chart && data.chart.result && data.chart.result[0] && data.chart.result[0].indicators) {
+                prices = data.chart.result[0].indicators.quote[0].close || [];
+                timestamps = data.chart.result[0].timestamp.map(ts => new Date(ts * 1000));
+                // Filter out null/undefined values
+                const validData = prices.map((price, i) => ({price, timestamp: timestamps[i]}))
+                    .filter(item => item.price !== null && item.price !== undefined);
+                prices = validData.map(item => item.price);
+                timestamps = validData.map(item => item.timestamp);
+            } else if (Array.isArray(data)) {
+                // If it's a simple array of prices
+                prices = data;
+                timestamps = Array.from({length: data.length}, (_, i) => new Date(Date.now() - (data.length - i - 1) * 24 * 60 * 60 * 1000));
+            } else if (data.prices && Array.isArray(data.prices)) {
+                // CoinGecko format
+                timestamps = data.prices.map(pair => new Date(pair[0]));
+                prices = data.prices.map(pair => pair[1]);
+            } else {
+                // Try to find prices in the data structure
+                for (const key in data) {
+                    if (Array.isArray(data[key]) && data[key].length > 0 && typeof data[key][0] === 'number') {
+                        prices = data[key];
+                        timestamps = Array.from({length: prices.length}, (_, i) => new Date(Date.now() - (prices.length - i - 1) * 24 * 60 * 60 * 1000));
+                        break;
+                    } else if (Array.isArray(data[key]) && data[key].length > 0 && Array.isArray(data[key][0]) && data[key][0].length >= 2) {
+                        // Try to handle [timestamp, price] format
+                        timestamps = data[key].map(pair => new Date(pair[0]));
+                        prices = data[key].map(pair => pair[1]);
+                        break;
+                    }
+                }
+            }
+            
+            if (prices.length === 0) {
+                throw new Error("No valid price data found in the provided JSON.");
+            }
+            
+            // Calculate statistics
+            calculateStats(prices, timestamps);
+        }
+        
+        function calculateStats(prices, timestamps) {
+            // Calculate statistics
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            const mean = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+            
+            // Standard deviation calculation
+            const squaredDifferences = prices.map(price => Math.pow(price - mean, 2));
+            const variance = squaredDifferences.reduce((sum, val) => sum + val, 0) / prices.length;
+            const stdDev = Math.sqrt(variance);
+            
+            // Get current value (last price in the array)
+            const currentValue = prices[prices.length - 1];
+            
+            // Calculate z-score
+            const zScore = (currentValue - mean) / stdDev;
+            
+            // Update the UI with calculated values
+            document.getElementById('mean').textContent = formatNumber(mean);
+            document.getElementById('stdDev').textContent = formatNumber(stdDev);
+            document.getElementById('currentValue').textContent = formatNumber(currentValue);
+            document.getElementById('zScore').textContent = zScore.toFixed(2);
+            
+            // Create the timeline chart
+            createTimeSeriesChart(prices, timestamps, mean, stdDev);
+            
+            // Create the distribution chart
+            createDistributionChart(mean, stdDev, currentValue);
+            
+            // Create the gauge chart for z-score
+            createZScoreGauge(zScore);
+            
+            // Hide loading and show content
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+        }
+        
+        function formatNumber(num) {
+            // Format large numbers with commas and two decimal places
+            return num.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        
+        function createTimeSeriesChart(prices, timestamps, mean, stdDev) {
+            const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+            
+            // Calculate z-scores for all prices
+            const zScores = prices.map(price => (price - mean) / stdDev);
+            
+            // Create shaded z-score regions
+            const zScoreRegions = [
+                { z: -3, color: 'rgba(100, 100, 255, 0.2)' }, // Dark blue (highest)
+                { z: -2, color: 'rgba(150, 150, 255, 0.2)' }, // Medium blue
+                { z: -1, color: 'rgba(200, 200, 255, 0.2)' }, // Light blue
+                { z: 0, color: 'rgba(230, 230, 230, 0.2)' },  // Neutral
+                { z: 1, color: 'rgba(255, 200, 200, 0.2)' },  // Light red
+                { z: 2, color: 'rgba(255, 150, 150, 0.2)' },  // Medium red
+                { z: 3, color: 'rgba(255, 100, 100, 0.2)' }   // Dark red (lowest)
+            ];
+            
+            // Calculate price levels for each z-score
+            const zScorePrices = zScoreRegions.map(region => mean + (region.z * stdDev));
+            
+            // Create datasets for z-score lines
+            const zScoreDatasets = zScoreRegions.map((region, index) => {
+                return {
+                    label: `Z = ${region.z}`,
+                    data: Array(timestamps.length).fill(zScorePrices[index]),
+                    borderColor: region.color.replace('0.2', '1'),
+                    borderWidth: 1,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    fill: false
+                };
+            });
+            
+            // Create the time series chart
+            timeSeriesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [
+                        {
+                            label: 'Price',
+                            data: prices,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Mean',
+                            data: Array(timestamps.length).fill(mean),
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        },
+                        ...zScoreDatasets
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM dd'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Price'
+                            }
+                        },
+                        y1: {
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Z-Score'
+                            },
+                            min: -3.5,
+                            max: 3.5,
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataset.label === 'Price') {
+                                        const value = context.parsed.y;
+                                        const z = (value - mean) / stdDev;
+                                        return [`Price: ${formatNumber(value)}`, `Z-Score: ${z.toFixed(2)}`];
+                                    } else {
+                                        return context.dataset.label;
+                                    }
+                                }
+                            }
+                        },
+                        legend: {
+                            display: true
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'backgroundColoring',
+                    beforeDraw: (chart) => {
+                        const {ctx, chartArea, scales} = chart;
+                        const {left, right, top, bottom} = chartArea;
+                        
+                        // Draw colored background areas based on z-scores
+                        for (let i = 0; i < zScoreRegions.length - 1; i++) {
+                            const y1 = scales.y.getPixelForValue(zScorePrices[i]);
+                            const y2 = scales.y.getPixelForValue(zScorePrices[i + 1]);
+                            
+                            ctx.fillStyle = zScoreRegions[i].color;
+                            ctx.fillRect(left, y1, right - left, y2 - y1);
+                        }
+                    }
+                }]
+            });
+        }
+        
+        function createDistributionChart(mean, stdDev, currentValue) {
+            const ctx = document.getElementById('distChart').getContext('2d');
+            
+            // Generate points for the normal distribution curve
+            const points = [];
+            const labels = [];
+            const backgroundColors = [];
+            
+            // Define z-score range for visualization
+            const minZ = -3;
+            const maxZ = 3;
+            const step = 0.1;
+            
+            for (let z = minZ; z <= maxZ; z += step) {
+                const x = mean + (z * stdDev);
+                const y = Math.exp(-0.5 * z * z) / (stdDev * Math.sqrt(2 * Math.PI));
+                
+                points.push({x, y});
+                labels.push(x.toFixed(2));
+                
+                // Map z-score to color (INVERTED: -3 is higher than mean, +3 is lower than mean)
+                const colorValue = -z; // Invert as per requirement
+                
+                if (colorValue < -2) {
+                    backgroundColors.push('rgba(255, 100, 100, 0.3)'); // Dark red (low)
+                } else if (colorValue < -1) {
+                    backgroundColors.push('rgba(255, 150, 150, 0.3)'); // Medium red
+                } else if (colorValue < 0) {
+                    backgroundColors.push('rgba(255, 200, 200, 0.3)'); // Light red
+                } else if (colorValue < 1) {
+                    backgroundColors.push('rgba(200, 200, 255, 0.3)'); // Light blue
+                } else if (colorValue < 2) {
+                    backgroundColors.push('rgba(150, 150, 255, 0.3)'); // Medium blue
+                } else {
+                    backgroundColors.push('rgba(100, 100, 255, 0.3)'); // Dark blue (high)
+                }
+            }
+            
+            // Create the distribution chart
+            distributionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Normal Distribution',
+                        data: points,
+                        borderColor: 'rgba(75, 85, 99, 1)',
+                        backgroundColor: 'rgba(75, 85, 99, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.4
+                    }, {
+                        label: 'Current Value',
+                        data: [{x: currentValue, y: 0}, {
+                            x: currentValue, 
+                            y: Math.exp(-0.5 * Math.pow((currentValue - mean) / stdDev, 2)) / (stdDev * Math.sqrt(2 * Math.PI))
+                        }],
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        borderDash: [5, 5]
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    // Calculate z-score for this value
+                                    const z = (value - mean) / stdDev;
+                                    // Show both value and z-score
+                                    return `${formatNumber(value)} (z=${z.toFixed(1)})`;
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Probability Density'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.x;
+                                    const z = (value - mean) / stdDev;
+                                    return [`Value: ${formatNumber(value)}`, `Z-Score: ${z.toFixed(2)}`];
+                                }
+                            }
+                        },
+                        legend: {
+                            display: true
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                },
+                plugins: [{
+                    id: 'backgroundColoring',
+                    beforeDraw: (chart) => {
+                        const {ctx, chartArea, scales} = chart;
+                        const {left, right, top, bottom} = chartArea;
+                        
+                        // Draw colored background areas based on z-scores
+                        let prevX = scales.x.getPixelForValue(mean + (minZ * stdDev));
+                        
+                        for (let i = 0; i < backgroundColors.length; i++) {
+                            const z = minZ + (i * step);
+                            const x = scales.x.getPixelForValue(mean + (z * stdDev));
+                            const nextZ = minZ + ((i+1) * step);
+                            const nextX = scales.x.getPixelForValue(mean + (nextZ * stdDev));
+                            
+                            ctx.fillStyle = backgroundColors[i];
+                            ctx.fillRect(x, top, nextX - x, bottom - top);
+                            
+                            prevX = x;
+                        }
+                    }
+                }]
+            });
+        }
+        
+        function createZScoreGauge(zScore) {
+            // Clamp z-score to be between -3 and 3
+            const clampedZScore = Math.max(-3, Math.min(3, zScore));
+            
+            // Convert z-score to gauge range (0-100)
+            // INVERTED: -3 -> 100, 0 -> 50, 3 -> 0
+            const gaugeValue = ((3 - clampedZScore) / 6) * 100;
+            
+            const opts = {
+                angle: 0,
+                lineWidth: 0.3,
+                radiusScale: 1,
+                pointer: {
+                    length: 0.6,
+                    strokeWidth: 0.035,
+                    color: '#000000'
+                },
+                limitMax: false,
+                limitMin: false,
+                colorStart: '#6FADCF',
+                colorStop: '#8FC0DA',
+                strokeColor: '#E0E0E0',
+                generateGradient: true,
+                highDpiSupport: true,
+                percentColors: [
+                    [0, "#ff6666"],     // Red for low values (z = 3)
+                    [0.33, "#ffcc66"],  // Orange for lower middle (z = 1)
+                    [0.5, "#66cc66"],   // Green for middle (z = 0)
+                    [0.67, "#66ccff"],  // Light blue for upper middle (z = -1)
+                    [1, "#6666ff"]      // Blue for high values (z = -3)
+                ]
+            };
+
+            const target = document.getElementById('gauge');
+            const gauge = new Gauge(target).setOptions(opts);
+            gauge.maxValue = 100;
+            gauge.setMinValue(0);
+            gauge.animationSpeed = 32;
+            gauge.set(gaugeValue);
+            
+            // Update gauge value text
+            document.getElementById('gaugeValue').textContent = `Z-Score: ${clampedZScore.toFixed(2)}`;
+        }
+        
+        // Start the initialization process
+        initialize();
+    </script>
+</body>
+</html>
