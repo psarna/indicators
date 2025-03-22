@@ -54,8 +54,8 @@
         .stat-box {
             background-color: #f0f0f0;
             padding: 15px;
-            border-radius: 5px;
-            width: 22%;
+            border-radius: 1px;
+            width: 12%;
             text-align: center;
         }
         .stat-box h3 {
@@ -168,13 +168,15 @@
 </head>
 <body>
     <div class="container">
-        <h1>Enhanced Financial Z-Score Visualizer</h1>
+        <h1>
+            <img src="logo.svg" width="50px" height="50px"></img>
+            sarna indicators
+            <img src="logo.svg" width="50px" height="50px"></img>
+        </h1>
         
         <div id="symbol-info" class="symbol-info">BTC/USD</div>
         
-        <div id="info" class="info">
-            Using default BTC/USD price data. You can provide a custom data source by adding ?script=URL to the page URL.
-        </div>
+        <div id="info" class="info"></div>
         
         <div id="errorMessage" class="error"></div>
         
