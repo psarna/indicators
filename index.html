@@ -35,6 +35,9 @@
             margin: 0 auto;
             position: relative;
         }
+        .gauge {
+            margin-bottom: 5px;
+        }
         .gauge-value {
             position: absolute;
             bottom: 0;
@@ -213,7 +216,7 @@
             </div>
             
             <div class="gauge-container">
-                <canvas id="gauge"></canvas>
+                <canvas id="gauge" class="gauge"></canvas>
                 <div class="gauge-value" id="gaugeValue">-</div>
             </div>
             <div id="script-editor-container" class="card">
