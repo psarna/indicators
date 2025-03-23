@@ -259,6 +259,33 @@
     </div>
 
     <script>
+
+        function sma(data, period = 3, valueIndex = null) {
+        if (data.length < period) {
+            return [];
+        }
+
+        const result = [];
+        let sum = 0;
+
+        for (let i = 0; i < period; i++) {
+            const value = valueIndex !== null ? data[i][valueIndex] : data[i];
+            sum += value;
+        }
+
+        result.push(sum / period);
+
+        for (let i = period; i < data.length; i++) {
+            const oldestValue = valueIndex !== null ? data[i - period][valueIndex] : data[i - period];
+            const newestValue = valueIndex !== null ? data[i][valueIndex] : data[i];
+            
+            sum = sum - oldestValue + newestValue;
+            result.push(sum / period);
+        }
+
+        return result;
+        }
+
         // Function to parse URL parameters
         function getParameterByName(name, url = window.location.href) {
             name = name.replace(/[\[\]]/g, '\\$&');
@@ -278,6 +305,26 @@
     return await response.json();
 }`;
 
+        function plnsma(coin, window) {
+            return `async function() {
+    const days = 365;
+    const interval = "daily";
+    let endpoint = "https://api.coingecko.com/api/v3/coins/${coin}/market_chart?vs_currency=pln&days="+days+"&interval="+interval;
+    const response = await fetch(endpoint);
+    let data = await response.json();
+  	let window = ${window};
+    let smaed = sma(data.prices, window, 1)
+    console.log(data.prices.length)
+    console.log(smaed)
+    for (let i = window; i < data.prices.length; ++i) {
+      console.log(data.prices[i][1], smaed[i-window])
+      data.prices[i][1] = smaed[i-window]
+    }
+    data.prices = data.prices.slice(window)
+    return data
+}`
+        }
+
         // Predefined scripts for popular symbols
         var predefinedScripts = {
             'btcusd': DEFAULT_SCRIPT,
@@ -294,7 +341,13 @@
         let endpoint = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=pln&days="+days+"&interval="+interval;
         const response = await fetch(endpoint);
         return await response.json();
-    }`
+    }`,
+            'btcplnsma14': plnsma('bitcoin', 14),
+            'btcplnsma72': plnsma('bitcoin', 72),
+            'btcplnsma144': plnsma('bitcoin', 144),
+            'ethplnsma14': plnsma('ethereum', 14),
+            'ethplnsma72': plnsma('ethereum', 72),
+            'ethplnsma144': plnsma('ethereum', 144),
         }
 
         // Base64 encode the default script
