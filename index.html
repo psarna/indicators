@@ -29,7 +29,7 @@
         .chart-container {
             position: relative;
             height: 400px;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
         }
         .gauge-container {
             margin: 0 auto;
@@ -49,7 +49,7 @@
         .stats {
             display: flex;
             justify-content: space-around;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         .stat-box {
             background-color: #f0f0f0;
@@ -91,7 +91,7 @@
         .symbol-info {
             text-align: center;
             font-size: 18px;
-            margin-bottom: 20px;
+            margin-bottom: 5px;
             font-weight: bold;
         }
         .tabs {
@@ -179,7 +179,20 @@
             Loading financial data...
         </div>
         
-        <div id="content" style="display:none;">
+        <div id="content" style="display:none;">         
+            <div class="tabs">
+                <div class="tab active" onclick="showChart('timelineChart')">Timeline with Z-Score</div>
+                <div class="tab" onclick="showChart('distributionChart')">Normal Distribution</div>
+            </div>
+            
+            <div id="timelineChart" class="chart-container">
+                <canvas id="timeSeriesChart"></canvas>
+            </div>
+            
+            <div id="distributionChart" class="chart-container" style="display:none;">
+                <canvas id="distChart"></canvas>
+            </div>
+
             <div class="stats">
                 <div class="stat-box">
                     <p>mean</p>
@@ -194,20 +207,7 @@
                     <p id="current-value">-</p>
                 </div>
             </div>
-            
-            <div class="tabs">
-                <div class="tab active" onclick="showChart('timelineChart')">Timeline with Z-Score</div>
-                <div class="tab" onclick="showChart('distributionChart')">Normal Distribution</div>
-            </div>
-            
-            <div id="timelineChart" class="chart-container">
-                <canvas id="timeSeriesChart"></canvas>
-            </div>
-            
-            <div id="distributionChart" class="chart-container" style="display:none;">
-                <canvas id="distChart"></canvas>
-            </div>
-            
+
             <div class="gauge-container">
                 <canvas id="gauge" class="gauge"></canvas>
                 <div class="gauge-value" id="gaugeValue">-</div>
@@ -239,22 +239,12 @@ function getParameterByName(name, url = window.location.href) {
     return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
 
-// Default BTC/USD data endpoint
-const DEFAULT_BTC_ENDPOINT = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily";
-
 // Default script that fetches BTC data
 const DEFAULT_SCRIPT = `async function() {
-    const response = await fetch("${DEFAULT_BTC_ENDPOINT}", {
-        mode: 'cors',
-        headers: {
-            'Accept': 'application/json'
-        }
-    });
-    
-    if (!response.ok) {
-        throw new Error(\`HTTP error! Status: \${response.status}\`);
-    }
-    
+    const days = 30;
+    const interval = "daily";
+    let endpoint = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days="+days+"&interval="+interval;
+    const response = await fetch(endpoint);
     return await response.json();
 }`;
 
