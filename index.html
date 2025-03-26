@@ -102,6 +102,7 @@
             padding: 5px;
             border-radius: 5px;
             margin-bottom: 20px;
+            text-align: center;
         }
 
         .symbol-info {
@@ -325,8 +326,21 @@
 }`
         }
 
-        // Predefined scripts for popular symbols
-        var predefinedScripts = {
+        function product(func1, func2) {
+            return `async function() {
+    var data1 = await (${func1})();
+    const data2 = await (${func2})();
+    if (data1.prices.length !== data2.prices.length) {
+        throw new Error("Data lengths do not match");
+    }
+    for (let i = 0; i < data1.prices.length; i++) {
+        data1.prices[i][1] *= data2.prices[i][1];
+    }
+    return data1;
+}`
+        }
+
+        const predefinedScripts = {
             'btcusd': DEFAULT_SCRIPT,
             'btcplnlong': `async function() {
         const days = 365;
@@ -348,6 +362,41 @@
             'ethplnsma14': plnsma('ethereum', 14),
             'ethplnsma72': plnsma('ethereum', 72),
             'ethplnsma144': plnsma('ethereum', 144),
+            'ethbtcplnsma14': product(plnsma('ethereum', 14), plnsma('bitcoin', 14)),
+            'ethbtcplnsma72': product(plnsma('ethereum', 72), plnsma('bitcoin', 72)),
+            'ethbtcplnsma144': product(plnsma('ethereum', 144), plnsma('bitcoin', 144)),
+            'ethchainsizeinc': `async function() {
+            let etherscanKey = "PUT-YOUR-ETHERSCAN-API-KEY-HERE";
+            if (etherscanKey == "PUT-YOUR-ETHERSCAN-API-KEY-HERE") {
+                throw new Error("Please provide your Etherscan API key in the script. The free one works too.");
+            }
+            let endpoint = "https://api.etherscan.io/api?module=stats&action=chainsize&startdate=2024-03-01&enddate=2025-03-24&clienttype=geth&syncmode=default&sort=asc&apikey="+etherscanKey;
+            let response = await fetch(endpoint);
+            response = await response.json();
+            let sizes = response.result.map(item => parseInt(item.chainSize, 10));
+            let smaed = sma(sizes, 30)
+            let diffs = []
+            for (let i = 30; i < sizes.length; ++i) {
+                diffs.push(sizes[i] - smaed[i-30])
+            }
+            return diffs;
+    }`
+        }
+
+        const predefinedInfo = {
+            'btcusd': 'BTC/USD data for the last 30 days',
+            'btcplnlong': 'BTC/PLN data for the last 365 days',
+            'btcplnshort': 'BTC/PLN data for the last 30 days',
+            'btcplnsma14': 'BTC/PLN data for the last 365 days with 14-day SMA',
+            'btcplnsma72': 'BTC/PLN data for the last 365 days with 72-day SMA',
+            'btcplnsma144': 'BTC/PLN data for the last 365 days with 144-day SMA',
+            'ethplnsma14': 'ETH/PLN data for the last 365 days with 14-day SMA',
+            'ethplnsma72': 'ETH/PLN data for the last 365 days with 72-day SMA',
+            'ethplnsma144': 'ETH/PLN data for the last 365 days with 144-day SMA',
+            'ethbtcplnsma14': 'ETH/PLN data for the last 365 days multiplied by BTC/PLN data for the last 365 days with 14-day SMA',
+            'ethbtcplnsma72': 'ETH/PLN data for the last 365 days multiplied by BTC/PLN data for the last 365 days with 72-day SMA',
+            'ethbtcplnsma144': 'ETH/PLN data for the last 365 days multiplied by BTC/PLN data for the last 365 days with 144-day SMA',
+            'ethchainsizeinc': 'ETH chain size difference, smaed over 30 days period'
         }
 
         // Base64 encode the default script
@@ -409,9 +458,12 @@
 
                     // If symbol is provided, look up the preloaded scripts
                     if (getParameterByName('symbol')) {
-                        if (predefinedScripts[getParameterByName('symbol')]) {
-                            scriptParam = encodeBase64(predefinedScripts[getParameterByName('symbol')]);
+                        let sym = getParameterByName('symbol');
+                        if (predefinedScripts[sym]) {
+                            scriptParam = encodeBase64(predefinedScripts[sym]);
                         }
+                        document.getElementById('info').style.display = 'block';
+                        document.getElementById('info').textContent = predefinedInfo[sym];
                     }
                 } else {
                     document.getElementById('info').style.display = 'none';
@@ -435,7 +487,10 @@
                     processData(data);
 
                 } catch (error) {
-                    throw new Error(`Error executing script: ${error.message}`);
+                    console.log(`Error executing script: ${error.message}`);
+                    document.getElementById('info').style.display = 'block';
+                    document.getElementById('info').textContent = `Error: ${error.message}`;
+                    processData({prices: [[0,0]]})
                 }
 
                 editor = CodeMirror.fromTextArea(document.getElementById('script-editor'), {
