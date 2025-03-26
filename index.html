@@ -21,6 +21,11 @@
             background-color: #f5f5f5;
         }
 
+        .predef {
+            margin: 0 auto;
+            text-align: center;
+        }
+
         .container {
             max-width: 1000px;
             margin: 0 auto;
@@ -201,11 +206,9 @@
             sarna indicators
         </h1>
         <h2><img src="logo.svg" width="50px" height="50px"></img></h2>
-
-        <div id="info" class="info"></div>
+        <div class="predef"><select id="predef"></select></div>
 
         <div id="errorMessage" class="error"></div>
-
         <div id="loading" class="loading">
             Loading financial data...
         </div>
@@ -219,6 +222,7 @@
             <div class="chart-box">
                 <div id="timelineChart" class="chart-container">
                     <div id="symbol-info" class="symbol-info"></div>
+                    <div id="info" class="info"></div>
                     <canvas id="timeSeriesChart"></canvas>
                     <canvas id="btcChart"></canvas>
                 </div>
@@ -454,20 +458,18 @@
         // Main function to initialize everything once data is loaded
         async function initialize() {
             try {
+                const urlSymbol = getParameterByName('symbol') || "ethplnsma72";
+
                 // If no script parameter is provided, use the default script
                 if (!scriptParam) {
                     scriptParam = encodeBase64(DEFAULT_SCRIPT);
                     document.getElementById('info').style.display = 'none';
 
-                    // If symbol is provided, look up the preloaded scripts
-                    if (getParameterByName('symbol')) {
-                        let sym = getParameterByName('symbol');
-                        if (predefinedScripts[sym]) {
-                            scriptParam = encodeBase64(predefinedScripts[sym]);
-                        }
-                        document.getElementById('info').style.display = 'block';
-                        document.getElementById('info').textContent = predefinedInfo[sym];
+                    if (predefinedScripts[urlSymbol]) {
+                        scriptParam = encodeBase64(predefinedScripts[urlSymbol]);
                     }
+                    document.getElementById('info').style.display = 'block';
+                    document.getElementById('info').textContent = predefinedInfo[urlSymbol];
                 } else {
                     document.getElementById('info').style.display = 'none';
                 }
@@ -486,8 +488,6 @@
                     const btcData = await btcFunction();
                     console.log("BTCDATA", btcData)
 
-                    // Update the symbol info if provided
-                    const urlSymbol = getParameterByName('symbol') || "btcusd";
                     document.getElementById('symbol-info').textContent = urlSymbol;
                     document.getElementById('symbol-input').value = urlSymbol;
 
@@ -508,6 +508,22 @@
                 });
 
                 createZScoreGauge(zScore)
+
+                const predef = document.getElementById('predef')
+                for (const [key, value] of Object.entries(predefinedScripts)) {
+                    const option = document.createElement('option')
+                    option.value = key
+                    option.text = key
+                    if (key === urlSymbol) {
+                        option.selected = true
+                    }
+                    predef.add(option)
+                }
+                predef.addEventListener('change', (event) => {
+                    const newUrl = window.location.pathname +
+                        `?symbol=${event.target.value}`;
+                    window.location.href = newUrl;
+                });
             } catch (error) {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('errorMessage').style.display = 'block';
