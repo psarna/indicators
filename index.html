@@ -31,9 +31,13 @@
         }
 
         .chart-container {
-            position: relative;
             height: 400px;
+            position: relative;
             margin-bottom: 10px;
+        }
+
+        .chart-box {
+            height: 800px;
         }
 
         .gauge-container {
@@ -198,8 +202,6 @@
         </h1>
         <h2><img src="logo.svg" width="50px" height="50px"></img></h2>
 
-        <div id="symbol-info" class="symbol-info">BTC/USD</div>
-
         <div id="info" class="info"></div>
 
         <div id="errorMessage" class="error"></div>
@@ -214,12 +216,16 @@
                 <div class="tab" onclick="showChart('distributionChart')">Normal Distribution</div>
             </div>
 
-            <div id="timelineChart" class="chart-container">
-                <canvas id="timeSeriesChart"></canvas>
-            </div>
+            <div class="chart-box">
+                <div id="timelineChart" class="chart-container">
+                    <div id="symbol-info" class="symbol-info"></div>
+                    <canvas id="timeSeriesChart"></canvas>
+                    <canvas id="btcChart"></canvas>
+                </div>
 
-            <div id="distributionChart" class="chart-container" style="display:none;">
-                <canvas id="distChart"></canvas>
+                <div id="distributionChart" class="chart-container" style="display:none;">
+                    <canvas id="distChart"></canvas>
+                </div>
             </div>
 
             <div class="gauge-container">
@@ -299,7 +305,7 @@
 
         // Default script that fetches BTC data
         const DEFAULT_SCRIPT = `async function() {
-    const days = 30;
+    const days = 365;
     const interval = "daily";
     let endpoint = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days="+days+"&interval="+interval;
     const response = await fetch(endpoint);
@@ -315,10 +321,7 @@
     let data = await response.json();
   	let window = ${window};
     let smaed = sma(data.prices, window, 1)
-    console.log(data.prices.length)
-    console.log(smaed)
     for (let i = window; i < data.prices.length; ++i) {
-      console.log(data.prices[i][1], smaed[i-window])
       data.prices[i][1] = smaed[i-window]
     }
     data.prices = data.prices.slice(window)
@@ -417,7 +420,7 @@
         let scriptParam = getParameterByName('script');
 
         // Chart instances
-        let timeSeriesChart, distributionChart;
+        let timeSeriesChart, distributionChart, btcChart;
 
         // Function to switch between chart views
         function showChart(chartId) {
@@ -477,6 +480,11 @@
                 try {
                     const scriptFunction = new Function('return ' + decodedScript)();
                     const data = await scriptFunction();
+                    const days = data.length || data.prices.length;
+                    // js programming lol
+                    const btcFunction = new Function('return ' + predefinedScripts["btcusd"].replace("const days = 30", "const days = "+days))()
+                    const btcData = await btcFunction();
+                    console.log("BTCDATA", btcData)
 
                     // Update the symbol info if provided
                     const urlSymbol = getParameterByName('symbol') || "btcusd";
@@ -484,7 +492,7 @@
                     document.getElementById('symbol-input').value = urlSymbol;
 
                     // Process the data
-                    processData(data);
+                    processData(data, btcData);
 
                 } catch (error) {
                     console.log(`Error executing script: ${error.message}`);
@@ -508,7 +516,7 @@
             }
         }
 
-        function processData(data) {
+        function processData(data, btcData) {
             // Extract prices and timestamps based on data structure
             let prices = [];
             let timestamps = [];
@@ -547,15 +555,18 @@
                 }
             }
 
+            // uber hacky, but meh
+            let btcPrices = btcData.prices.map(pair => pair[1])
+
             if (prices.length === 0) {
                 throw new Error("No valid price data found in the provided JSON.");
             }
 
             // Calculate statistics
-            calculateStats(prices, timestamps);
+            calculateStats(prices, btcPrices, timestamps);
         }
 
-        function calculateStats(prices, timestamps) {
+        function calculateStats(prices, btcPrices, timestamps) {
             // Calculate statistics
             const min = Math.min(...prices);
             const max = Math.max(...prices);
@@ -578,7 +589,11 @@
             document.getElementById('current-value').textContent = formatNumber(currentValue);
 
             // Create the timeline chart
-            createTimeSeriesChart(prices, timestamps, mean, stdDev);
+            timeSeriesChart = createTimeSeriesChart(prices, timestamps, mean, stdDev);
+
+            // Create the btc chart
+            // TODO: fetch it in a hacky way here
+            btcChart = createTimeSeriesChart(btcPrices, timestamps, mean, stdDev, 'btcChart')
 
             // Create the distribution chart
             createDistributionChart(mean, stdDev, currentValue);
@@ -597,8 +612,8 @@
             });
         }
 
-        function createTimeSeriesChart(prices, timestamps, mean, stdDev) {
-            const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+        function createTimeSeriesChart(prices, timestamps, mean, stdDev, targetElement = 'timeSeriesChart') {
+            const ctx = document.getElementById(targetElement).getContext('2d');
 
             // Calculate z-scores for all prices
             const zScores = prices.map(price => (price - mean) / stdDev);
@@ -630,7 +645,100 @@
                 };
             });
 
-            timeSeriesChart = new Chart(ctx, {
+            // js programming lol
+            if (targetElement === 'btcChart') {
+                return new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: timestamps,
+                        datasets: [
+                            {
+                                label: 'btc/usd',
+                                data: prices,
+                                borderColor: function (context) {
+                                    const index = context.dataIndex;
+                                    const value = context.dataset.data[index];
+                                    const min = Math.min(...prices);
+                                    const max = Math.max(...prices);
+                                    const percentage = (value - min) / (max - min);
+
+                                    // Generate color from green (low) to red (high)
+                                    const red = Math.round(255 * percentage);
+                                    const green = Math.round(255 * (1 - percentage));
+                                    return `rgba(${red}, ${green}, 0, 1)`;
+                                },
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 0,
+                                pointHoverRadius: 5,
+                                segment: {
+                                    borderColor: function (context) {
+                                        const chart = context.chart;
+                                        const { ctx, chartArea } = chart;
+
+                                        // Create gradient along the line
+                                        if (!chartArea) {
+                                            return;
+                                        }
+
+                                        const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                                        gradient.addColorStop(0, 'rgba(0, 255, 0, 1)');  // Green at bottom (low)
+                                        gradient.addColorStop(1, 'rgba(255, 0, 0, 1)');  // Red at top (high)
+                                        return gradient;
+                                    }
+                                }
+                            },
+                        ]
+                    },
+                    options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM dd'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'btc/usd'
+                            }
+                        },
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    if (context.dataset.label === 'Value') {
+                                        const value = context.parsed.y;
+                                        const z = (value - mean) / stdDev;
+                                        return [`Price: ${formatNumber(value)}`, `Z-Score: ${z.toFixed(2)}`];
+                                    } else {
+                                        return context.dataset.label;
+                                    }
+                                }
+                            }
+                        },
+                        legend: {
+                            display: true
+                        }
+                    }
+                },
+                })
+            }
+
+            return new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: timestamps,
