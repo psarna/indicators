@@ -498,7 +498,7 @@
                     console.log(`Error executing script: ${error.message}`);
                     document.getElementById('info').style.display = 'block';
                     document.getElementById('info').textContent = `Error: ${error.message}`;
-                    processData({prices: [[0,0]]})
+                    processData({prices: [[0,0]]}, {prices: [[0, 0]]})
                 }
 
                 editor = CodeMirror.fromTextArea(document.getElementById('script-editor'), {
